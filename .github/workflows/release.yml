@@ -22,6 +22,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          HUSKY: 0
 
       - name: Set version from tag
         run: |
@@ -35,11 +37,11 @@ jobs:
       - name: Build plugin
         run: npm run build
 
-      - name: Package release assets
-        run: zip obsidian-foldstate.zip main.js manifest.json styles.css
-
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: obsidian-foldstate.zip
+          files: |
+            main.js
+            manifest.json
+            styles.css
           generate_release_notes: true
