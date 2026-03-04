@@ -1,0 +1,9 @@
+{
+  "id": "obsidian-foldstate",
+  "name": "Foldstate",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Persists heading fold state by embedding markers in headings.",
+  "author": "samhopwell",
+  "isDesktopOnly": false
+}

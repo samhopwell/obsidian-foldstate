@@ -1,0 +1,25 @@
+{
+  "name": "obsidian-foldstate",
+  "version": "1.0.0",
+  "description": "Persists heading fold state by embedding markers in headings.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@codemirror/language": "^6.0.0",
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.21.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.2",
+    "obsidian": "latest",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
