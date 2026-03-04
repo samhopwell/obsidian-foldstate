@@ -1,9 +1,9 @@
 {
-  "id": "obsidian-foldstate",
-  "name": "Foldstate",
-  "version": "1.0.0",
-  "minAppVersion": "1.4.0",
-  "description": "Persists heading fold state by embedding markers in headings.",
-  "author": "samhopwell",
-  "isDesktopOnly": false
+    "id": "foldstate",
+    "name": "Foldstate",
+    "version": "1.0.1",
+    "minAppVersion": "1.4.0",
+    "description": "A plugin that persists heading fold state across devices and sessions by embedding fold markers directly in your markdown files.",
+    "author": "samhopwell",
+    "isDesktopOnly": false
 }
