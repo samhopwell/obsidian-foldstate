@@ -8,9 +8,9 @@ import { parseFoldedHeadings, updateFoldMarker } from "./marker";
 export default class CollapsiblePlugin extends Plugin {
   private isSyncing = false;
 
-  async onload() {
+  onload() {
     this.registerEditorExtension([
-      buildFoldExtension(this.handleFoldChange.bind(this)),
+      buildFoldExtension((lineNum, folded) => void this.handleFoldChange(lineNum, folded)),
       buildMarkerHideExtension(),
     ]);
 
@@ -19,7 +19,7 @@ export default class CollapsiblePlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf) => {
         if (!leaf || !(leaf.view instanceof MarkdownView)) return;
-        this.applyFoldState(leaf.view.file);
+        void this.applyFoldState(leaf.view.file);
       })
     );
 
@@ -28,7 +28,7 @@ export default class CollapsiblePlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("modify", (abstractFile) => {
         if (!(abstractFile instanceof TFile)) return;
-        this.syncFoldStateFromFile(abstractFile);
+        void this.syncFoldStateFromFile(abstractFile);
       })
     );
   }
