@@ -5,7 +5,9 @@ import { iterFoldedRanges, setsEqual, getFoldRangeMap } from "../src/fold-extens
 // Helper: build a lightweight RangeCursor mock
 // ---------------------------------------------------------------------------
 
-function makeCursor(ranges: Array<{ from: number; lineNumber: number }>) {
+type Range = { from: number; lineNumber: number; text?: string };
+
+function makeCursor(ranges: Array<Range>) {
   let index = 0;
   return {
     get value() { return index < ranges.length ? {} : null; },
@@ -14,10 +16,10 @@ function makeCursor(ranges: Array<{ from: number; lineNumber: number }>) {
   };
 }
 
-function makeLineAt(ranges: Array<{ from: number; lineNumber: number }>) {
+function makeLineAt(ranges: Array<Range>) {
   return (pos: number) => {
     const entry = ranges.find((r) => r.from === pos);
-    return { number: entry?.lineNumber ?? 1 };
+    return { number: entry?.lineNumber ?? 1, text: entry?.text ?? "## Heading" };
   };
 }
 
@@ -49,13 +51,13 @@ describe("setsEqual", () => {
 
 describe("iterFoldedRanges", () => {
   it("returns empty set when rangeSet is null", () => {
-    const result = iterFoldedRanges(null, () => ({ number: 1 }));
+    const result = iterFoldedRanges(null, () => ({ number: 1, text: "# H" }));
     expect(result.size).toBe(0);
   });
 
   it("returns empty set for empty rangeSet", () => {
     const cursor = makeCursor([]);
-    const result = iterFoldedRanges({ iter: () => cursor }, () => ({ number: 1 }));
+    const result = iterFoldedRanges({ iter: () => cursor }, () => ({ number: 1, text: "# H" }));
     expect(result.size).toBe(0);
   });
 
@@ -69,6 +71,18 @@ describe("iterFoldedRanges", () => {
 
     const result = iterFoldedRanges({ iter: () => cursor }, lineAt);
     expect(result).toEqual(new Set([0, 4]));
+  });
+
+  it("ignores non-heading folds (frontmatter, code blocks, lists)", () => {
+    const ranges = [
+      { from: 0, lineNumber: 1, text: "---" },       // frontmatter delimiter
+      { from: 40, lineNumber: 4, text: "```js" },    // code block
+      { from: 60, lineNumber: 8, text: "- item" },   // list
+      { from: 90, lineNumber: 12, text: "## Real" }, // → line index 11
+    ];
+    const cursor = makeCursor(ranges);
+    const result = iterFoldedRanges({ iter: () => cursor }, makeLineAt(ranges));
+    expect(result).toEqual(new Set([11]));
   });
 
   it("handles a single folded range", () => {
