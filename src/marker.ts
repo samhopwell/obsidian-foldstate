@@ -1,6 +1,12 @@
 const FOLD_MARKER = "%% fold %%";
 const FOLD_MARKER_REGEX = /\s*%%\s*fold\s*%%\s*$/;
 
+/** ATX headings only — other foldable ranges (frontmatter, code blocks,
+ *  lists) must never receive a marker; on `---` it breaks the YAML block. */
+export function isHeadingLine(line: string): boolean {
+  return /^#{1,6}(\s|$)/.test(line);
+}
+
 export function hasFoldMarker(line: string): boolean {
   return FOLD_MARKER_REGEX.test(line);
 }
@@ -18,7 +24,7 @@ export function parseFoldedHeadings(content: string): Set<number> {
   const lines = content.split("\n");
   const folded = new Set<number>();
   for (let i = 0; i < lines.length; i++) {
-    if (hasFoldMarker(lines[i])) {
+    if (isHeadingLine(lines[i]) && hasFoldMarker(lines[i])) {
       folded.add(i);
     }
   }

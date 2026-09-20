@@ -1,23 +1,28 @@
 import { ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { foldedRanges } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
+import { isHeadingLine } from "./marker";
 
 type RangeCursor = { value: unknown; from: number; to: number; next(): void };
 type RangeSet = { iter(): RangeCursor } | null;
+type Line = { number: number; text: string };
 
 /**
  * Pure function: maps a foldedRanges RangeSet + lineAt lookup to 0-indexed
  * line numbers. Extracted for testability without module mocking.
+ * Non-heading folds (frontmatter, code blocks, lists) are ignored — we only
+ * persist heading folds.
  */
 export function iterFoldedRanges(
   rangeSet: RangeSet,
-  lineAt: (pos: number) => { number: number }
+  lineAt: (pos: number) => Line
 ): Set<number> {
   const lines = new Set<number>();
   if (!rangeSet) return lines;
   const cursor = rangeSet.iter();
   while (cursor.value !== null) {
-    lines.add(lineAt(cursor.from).number - 1); // convert to 0-indexed
+    const line = lineAt(cursor.from);
+    if (isHeadingLine(line.text)) lines.add(line.number - 1); // 0-indexed
     cursor.next();
   }
   return lines;
@@ -39,8 +44,11 @@ export function getFoldRangeMap(
   if (!ranges) return map;
   const cursor = ranges.iter();
   while (cursor.value !== null) {
-    const lineNum = state.doc.lineAt(cursor.from).number - 1;
-    map.set(lineNum, { from: cursor.from, to: cursor.to });
+    const line = state.doc.lineAt(cursor.from);
+    // Leave non-heading folds alone — otherwise sync unfolds them.
+    if (isHeadingLine(line.text)) {
+      map.set(line.number - 1, { from: cursor.from, to: cursor.to });
+    }
     cursor.next();
   }
   return map;
