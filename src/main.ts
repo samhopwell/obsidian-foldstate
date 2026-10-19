@@ -98,7 +98,7 @@ export default class CollapsiblePlugin extends Plugin {
     // Defer one microtask so the CM6 editor finishes mounting.
     // On mobile, active-leaf-change can fire while the editor is still
     // being initialised, and dispatching effects too early is a no-op.
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view || view.file?.path !== file.path) return;
