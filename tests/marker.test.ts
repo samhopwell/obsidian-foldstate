@@ -82,6 +82,15 @@ describe("parseFoldedHeadings", () => {
 });
 
 describe("updateFoldMarker", () => {
+  it("keeps the marker on the heading and preserves CRLF when toggling", () => {
+    const original = "# Heading\r\nBody text\r\n## Another\r\n";
+    const marked = "# Heading %% fold %%\r\nBody text\r\n## Another\r\n";
+    expect(updateFoldMarker(original, 0, true)).toBe(marked);
+    expect(updateFoldMarker(marked, 0, true)).toBe(marked);
+    expect(parseFoldedHeadings(marked)).toEqual(new Set([0]));
+    expect(updateFoldMarker(marked, 0, false)).toBe(original);
+  });
+
   const content = [
     "# Section A",       // line 0
     "Body text",         // line 1

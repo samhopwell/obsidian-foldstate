@@ -13,11 +13,17 @@ export function hasFoldMarker(line: string): boolean {
 
 export function addFoldMarker(line: string): string {
   if (hasFoldMarker(line)) return line;
-  return `${line} ${FOLD_MARKER}`;
+  // Splitting CRLF content on "\n" leaves "\r" at the end of the line.
+  // Keep the marker before it so it stays on the heading's line.
+  const ending = line.endsWith("\r") ? "\r" : "";
+  const text = ending ? line.slice(0, -1) : line;
+  return `${text} ${FOLD_MARKER}${ending}`;
 }
 
 export function removeFoldMarker(line: string): string {
-  return line.replace(FOLD_MARKER_REGEX, "");
+  const ending = line.endsWith("\r") ? "\r" : "";
+  const text = ending ? line.slice(0, -1) : line;
+  return text.replace(FOLD_MARKER_REGEX, "") + ending;
 }
 
 export function parseFoldedHeadings(content: string): Set<number> {
