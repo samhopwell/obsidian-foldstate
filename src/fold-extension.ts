@@ -1,7 +1,9 @@
-import { ViewPlugin, ViewUpdate } from "@codemirror/view";
-import { foldedRanges } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
-import { isHeadingLine } from "./marker";
+import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language";
+import { Annotation, ChangeSpec, EditorState } from "@codemirror/state";
+import { addFoldMarker, isHeadingLine, removeFoldMarker } from "./marker";
+
+/** Restoring saved folds must not rewrite the document. */
+export const restoringFolds = Annotation.define<boolean>();
 
 type RangeCursor = { value: unknown; from: number; to: number; next(): void };
 type RangeSet = { iter(): RangeCursor } | null;
@@ -63,28 +65,38 @@ export function setsEqual(a: Set<number>, b: Set<number>): boolean {
 }
 
 /**
- * Builds a CodeMirror ViewPlugin that calls `onFoldChange` whenever a
- * heading is folded or unfolded.
- *
- * @param onFoldChange - callback(lineNum: 0-indexed, folded: boolean)
+ * Persist explicit fold/unfold actions in the same editor transaction.
+ * Moving an existing fold during a text edit is not a fold action. Never
+ * apply editor line numbers to a separately saved (possibly older) file.
  */
-export function buildFoldExtension(
-  onFoldChange: (lineNum: number, folded: boolean) => void
-) {
-  return ViewPlugin.fromClass(
-    class {
-      private prevFolds = new Set<number>();
+export function buildFoldExtension() {
+  return EditorState.transactionFilter.of((tr) => {
+    if (tr.annotation(restoringFolds)) return tr;
 
-      update(update: ViewUpdate) {
-        const current = getFoldedLines(update.state);
-        if (!setsEqual(current, this.prevFolds)) {
-          const added = [...current].filter((l) => !this.prevFolds.has(l));
-          const removed = [...this.prevFolds].filter((l) => !current.has(l));
-          added.forEach((l) => onFoldChange(l, true));
-          removed.forEach((l) => onFoldChange(l, false));
-          this.prevFolds = current;
+    const actions = new Map<number, boolean>();
+    for (const effect of tr.effects) {
+      if (effect.is(foldEffect) || effect.is(unfoldEffect)) {
+        const line = tr.newDoc.lineAt(effect.value.from);
+        if (isHeadingLine(line.text)) {
+          actions.set(line.number, effect.is(foldEffect));
         }
       }
     }
-  );
+
+    const changes: ChangeSpec[] = [];
+    for (const [lineNum, folded] of actions) {
+      const line = tr.newDoc.line(lineNum);
+      const text = folded ? addFoldMarker(line.text) : removeFoldMarker(line.text);
+      if (text === line.text) continue;
+      // Only edit the suffix, preserving the heading and mapped fold ranges.
+      changes.push({
+        from: folded ? line.to : line.from + text.length,
+        to: line.to,
+        insert: folded ? text.slice(line.text.length) : "",
+      });
+    }
+
+    // CodeMirror maps the selection and fold effects through these changes.
+    return changes.length ? [tr, { changes, sequential: true }] : tr;
+  });
 }

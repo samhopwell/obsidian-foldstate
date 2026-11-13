@@ -1,16 +1,15 @@
 import { Plugin, TFile, MarkdownView } from "obsidian";
 import { EditorView } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
 import { foldEffect, unfoldEffect, foldable, ensureSyntaxTree } from "@codemirror/language";
-import { buildFoldExtension, getFoldRangeMap, setsEqual } from "./fold-extension";
+import { buildFoldExtension, getFoldRangeMap, restoringFolds, setsEqual } from "./fold-extension";
 import { buildMarkerHideExtension } from "./hide-extension";
-import { parseFoldedHeadings, updateFoldMarker } from "./marker";
+import { parseFoldedHeadings } from "./marker";
 
 export default class CollapsiblePlugin extends Plugin {
-  private isSyncing = false;
-
   onload() {
     this.registerEditorExtension([
-      buildFoldExtension((lineNum, folded) => void this.handleFoldChange(lineNum, folded)),
+      buildFoldExtension(),
       buildMarkerHideExtension(),
     ]);
 
@@ -33,25 +32,7 @@ export default class CollapsiblePlugin extends Plugin {
     );
   }
 
-  private async handleFoldChange(lineNum: number, folded: boolean) {
-    if (this.isSyncing) return;
-    const file = this.app.workspace.getActiveFile();
-    if (!file) return;
-
-    this.isSyncing = true;
-    try {
-      await this.app.vault.process(file, (content) =>
-        updateFoldMarker(content, lineNum, folded)
-      );
-    } finally {
-      this.isSyncing = false;
-    }
-  }
-
   private async syncFoldStateFromFile(file: TFile) {
-    // Skip our own writes to avoid reacting to markers we just placed.
-    if (this.isSyncing) return;
-
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view || view.file?.path !== file.path) return;
 
@@ -59,6 +40,8 @@ export default class CollapsiblePlugin extends Plugin {
     if (!cm) return;
 
     const content = await this.app.vault.read(file);
+    // A save notification may refer to an older version than the open editor.
+    if (view.file?.path !== file.path || !EditorState.create({ doc: content }).doc.eq(cm.state.doc)) return;
     const markedLines = parseFoldedHeadings(content);
     const currentFoldMap = getFoldRangeMap(cm.state);
     const currentLines = new Set(currentFoldMap.keys());
@@ -82,18 +65,12 @@ export default class CollapsiblePlugin extends Plugin {
     }
 
     if (effects.length) {
-      this.isSyncing = true;
-      cm.dispatch({ effects });
-      this.isSyncing = false;
+      cm.dispatch({ effects, annotations: restoringFolds.of(true) });
     }
   }
 
   private async applyFoldState(file: TFile | null) {
     if (!file || file.extension !== "md") return;
-
-    const content = await this.app.vault.read(file);
-    const foldedLines = parseFoldedHeadings(content);
-    if (foldedLines.size === 0) return;
 
     // Defer one microtask so the CM6 editor finishes mounting.
     // On mobile, active-leaf-change can fire while the editor is still
@@ -105,6 +82,8 @@ export default class CollapsiblePlugin extends Plugin {
 
     const cm = (view.editor as unknown as { cm: EditorView }).cm;
     if (!cm) return;
+    const foldedLines = parseFoldedHeadings(cm.state.doc.toString());
+    if (foldedLines.size === 0) return;
 
     // Ensure the language syntax tree is available before calling foldable().
     // On mobile the tree is built lazily; without this, foldable() returns
@@ -119,9 +98,7 @@ export default class CollapsiblePlugin extends Plugin {
     }
 
     if (effects.length) {
-      this.isSyncing = true;
-      cm.dispatch({ effects });
-      this.isSyncing = false;
+      cm.dispatch({ effects, annotations: restoringFolds.of(true) });
     }
   }
 }
