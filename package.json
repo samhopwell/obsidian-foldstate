@@ -20,7 +20,6 @@
     "eslint": "^10.0.0",
     "eslint-plugin-obsidianmd": "^0.6.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.0",
     "obsidian": "latest",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.56.1",

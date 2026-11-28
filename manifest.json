@@ -3,7 +3,7 @@
     "name": "Foldstate",
     "version": "1.0.3",
     "minAppVersion": "1.4.0",
-    "description": "A plugin that persists heading fold state across devices and sessions by embedding fold markers directly in your markdown files.",
+    "description": "Keep folded headings folded across devices and sessions by saving fold markers in your notes.",
     "author": "samhopwell",
     "isDesktopOnly": false
 }

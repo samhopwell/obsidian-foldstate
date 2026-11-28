@@ -61,7 +61,7 @@ describe("fold restoration coordinates", () => {
   });
 
   it("opens the current editor content rather than reading an older saved copy", async () => {
-    vi.stubGlobal("window", globalThis);
+    vi.stubGlobal("activeWindow", globalThis);
     const doc = "New\n# Heading %% fold %%\nBody";
     const { plugin, cm, file, app } = fixture(doc, "# Heading %% fold %%\nBody");
     await plugin["applyFoldState"](file);
