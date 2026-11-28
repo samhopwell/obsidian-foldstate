@@ -1,38 +1,9 @@
 import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language";
-import { Annotation, ChangeSpec, EditorState } from "@codemirror/state";
+import { Annotation, ChangeSpec, EditorState, Transaction } from "@codemirror/state";
 import { addFoldMarker, isHeadingLine, removeFoldMarker } from "./marker";
 
 /** Restoring saved folds must not rewrite the document. */
 export const restoringFolds = Annotation.define<boolean>();
-
-type RangeCursor = { value: unknown; from: number; to: number; next(): void };
-type RangeSet = { iter(): RangeCursor } | null;
-type Line = { number: number; text: string };
-
-/**
- * Pure function: maps a foldedRanges RangeSet + lineAt lookup to 0-indexed
- * line numbers. Extracted for testability without module mocking.
- * Non-heading folds (frontmatter, code blocks, lists) are ignored — we only
- * persist heading folds.
- */
-export function iterFoldedRanges(
-  rangeSet: RangeSet,
-  lineAt: (pos: number) => Line
-): Set<number> {
-  const lines = new Set<number>();
-  if (!rangeSet) return lines;
-  const cursor = rangeSet.iter();
-  while (cursor.value !== null) {
-    const line = lineAt(cursor.from);
-    if (isHeadingLine(line.text)) lines.add(line.number - 1); // 0-indexed
-    cursor.next();
-  }
-  return lines;
-}
-
-export function getFoldedLines(state: EditorState): Set<number> {
-  return iterFoldedRanges(foldedRanges(state), (pos) => state.doc.lineAt(pos));
-}
 
 /**
  * Returns a Map of 0-indexed line number → {from, to} for every currently
@@ -96,7 +67,14 @@ export function buildFoldExtension() {
       });
     }
 
+    if (!changes.length) return tr;
     // CodeMirror maps the selection and fold effects through these changes.
-    return changes.length ? [tr, { changes, sequential: true }] : tr;
+    // A pure fold action stays out of undo history, otherwise Ctrl+Z would
+    // strip the marker but leave the heading folded.
+    return [tr, {
+      changes,
+      sequential: true,
+      annotations: tr.docChanged ? [] : Transaction.addToHistory.of(false),
+    }];
   });
 }

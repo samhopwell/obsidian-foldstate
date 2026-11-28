@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Transaction } from "@codemirror/state";
 import { codeFolding, foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language";
 import { buildFoldExtension, getFoldRangeMap, restoringFolds } from "../src/fold-extension";
 
@@ -96,5 +96,12 @@ describe("fold marker transactions (real CodeMirror state)", () => {
     const tr = state.update({ effects: foldEffect.of(range(state, 1, 3)) });
     expect(tr.docChanged).toBe(false);
     expect(foldedRanges(tr.state).size).toBe(1);
+  });
+
+  it("keeps marker edits from a pure fold action out of undo history", () => {
+    const state = editor("# Heading\nBody");
+    const tr = state.update({ effects: foldEffect.of(range(state, 1, 2)) });
+    expect(tr.state.doc.line(1).text).toBe("# Heading %% fold %%");
+    expect(tr.annotation(Transaction.addToHistory)).toBe(false);
   });
 });
