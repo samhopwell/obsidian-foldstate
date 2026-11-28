@@ -1,36 +1,9 @@
-import { EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
-import { foldedRanges } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
-import { isHeadingLine } from "./marker";
+import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language";
+import { Annotation, ChangeSpec, EditorState, Transaction } from "@codemirror/state";
+import { addFoldMarker, isHeadingLine, removeFoldMarker } from "./marker";
 
-type RangeCursor = { value: unknown; from: number; to: number; next(): void };
-type RangeSet = { iter(): RangeCursor } | null;
-type Line = { number: number; text: string };
-
-/**
- * Pure function: maps a foldedRanges RangeSet + lineAt lookup to 0-indexed
- * line numbers. Extracted for testability without module mocking.
- * Non-heading folds (frontmatter, code blocks, lists) are ignored — we only
- * persist heading folds.
- */
-export function iterFoldedRanges(
-  rangeSet: RangeSet,
-  lineAt: (pos: number) => Line
-): Set<number> {
-  const lines = new Set<number>();
-  if (!rangeSet) return lines;
-  const cursor = rangeSet.iter();
-  while (cursor.value !== null) {
-    const line = lineAt(cursor.from);
-    if (isHeadingLine(line.text)) lines.add(line.number - 1); // 0-indexed
-    cursor.next();
-  }
-  return lines;
-}
-
-export function getFoldedLines(state: EditorState): Set<number> {
-  return iterFoldedRanges(foldedRanges(state), (pos) => state.doc.lineAt(pos));
-}
+/** Restoring saved folds must not rewrite the document. */
+export const restoringFolds = Annotation.define<boolean>();
 
 /**
  * Returns a Map of 0-indexed line number → {from, to} for every currently
@@ -63,28 +36,45 @@ export function setsEqual(a: Set<number>, b: Set<number>): boolean {
 }
 
 /**
- * Builds a CodeMirror ViewPlugin that calls `onFoldChange` whenever a
- * heading is folded or unfolded.
- *
- * @param onFoldChange - callback(view, lineNum: 0-indexed, folded: boolean)
+ * Persist explicit fold/unfold actions in the same editor transaction.
+ * Moving an existing fold during a text edit is not a fold action. Never
+ * apply editor line numbers to a separately saved (possibly older) file.
  */
-export function buildFoldExtension(
-  onFoldChange: (view: EditorView, lineNum: number, folded: boolean) => void
-) {
-  return ViewPlugin.fromClass(
-    class {
-      private prevFolds = new Set<number>();
+export function buildFoldExtension() {
+  return EditorState.transactionFilter.of((tr) => {
+    if (tr.annotation(restoringFolds)) return tr;
 
-      update(update: ViewUpdate) {
-        const current = getFoldedLines(update.state);
-        if (!setsEqual(current, this.prevFolds)) {
-          const added = [...current].filter((l) => !this.prevFolds.has(l));
-          const removed = [...this.prevFolds].filter((l) => !current.has(l));
-          added.forEach((l) => onFoldChange(update.view, l, true));
-          removed.forEach((l) => onFoldChange(update.view, l, false));
-          this.prevFolds = current;
+    const actions = new Map<number, boolean>();
+    for (const effect of tr.effects) {
+      if (effect.is(foldEffect) || effect.is(unfoldEffect)) {
+        const line = tr.newDoc.lineAt(effect.value.from);
+        if (isHeadingLine(line.text)) {
+          actions.set(line.number, effect.is(foldEffect));
         }
       }
     }
-  );
+
+    const changes: ChangeSpec[] = [];
+    for (const [lineNum, folded] of actions) {
+      const line = tr.newDoc.line(lineNum);
+      const text = folded ? addFoldMarker(line.text) : removeFoldMarker(line.text);
+      if (text === line.text) continue;
+      // Only edit the suffix, preserving the heading and mapped fold ranges.
+      changes.push({
+        from: folded ? line.to : line.from + text.length,
+        to: line.to,
+        insert: folded ? text.slice(line.text.length) : "",
+      });
+    }
+
+    if (!changes.length) return tr;
+    // CodeMirror maps the selection and fold effects through these changes.
+    // A pure fold action stays out of undo history, otherwise Ctrl+Z would
+    // strip the marker but leave the heading folded.
+    return [tr, {
+      changes,
+      sequential: true,
+      annotations: tr.docChanged ? [] : Transaction.addToHistory.of(false),
+    }];
+  });
 }
