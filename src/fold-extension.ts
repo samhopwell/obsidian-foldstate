@@ -1,4 +1,4 @@
-import { ViewPlugin, ViewUpdate } from "@codemirror/view";
+import { EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { foldedRanges } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { isHeadingLine } from "./marker";
@@ -66,10 +66,10 @@ export function setsEqual(a: Set<number>, b: Set<number>): boolean {
  * Builds a CodeMirror ViewPlugin that calls `onFoldChange` whenever a
  * heading is folded or unfolded.
  *
- * @param onFoldChange - callback(lineNum: 0-indexed, folded: boolean)
+ * @param onFoldChange - callback(view, lineNum: 0-indexed, folded: boolean)
  */
 export function buildFoldExtension(
-  onFoldChange: (lineNum: number, folded: boolean) => void
+  onFoldChange: (view: EditorView, lineNum: number, folded: boolean) => void
 ) {
   return ViewPlugin.fromClass(
     class {
@@ -80,8 +80,8 @@ export function buildFoldExtension(
         if (!setsEqual(current, this.prevFolds)) {
           const added = [...current].filter((l) => !this.prevFolds.has(l));
           const removed = [...this.prevFolds].filter((l) => !current.has(l));
-          added.forEach((l) => onFoldChange(l, true));
-          removed.forEach((l) => onFoldChange(l, false));
+          added.forEach((l) => onFoldChange(update.view, l, true));
+          removed.forEach((l) => onFoldChange(update.view, l, false));
           this.prevFolds = current;
         }
       }

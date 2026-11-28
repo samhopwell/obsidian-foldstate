@@ -4,7 +4,6 @@ import {
   addFoldMarker,
   removeFoldMarker,
   parseFoldedHeadings,
-  updateFoldMarker,
 } from "../src/marker";
 
 describe("hasFoldMarker", () => {
@@ -81,35 +80,3 @@ describe("parseFoldedHeadings", () => {
   });
 });
 
-describe("updateFoldMarker", () => {
-  const content = [
-    "# Section A",       // line 0
-    "Body text",         // line 1
-    "## Section B",      // line 2
-    "More text",         // line 3
-  ].join("\n");
-
-  it("adds marker to the correct line when folded=true", () => {
-    const result = updateFoldMarker(content, 2, true);
-    const lines = result.split("\n");
-    expect(lines[2]).toBe("## Section B %% fold %%");
-    expect(lines[0]).toBe("# Section A"); // unchanged
-  });
-
-  it("removes marker from the correct line when folded=false", () => {
-    const withMarker = updateFoldMarker(content, 0, true);
-    const result = updateFoldMarker(withMarker, 0, false);
-    expect(result.split("\n")[0]).toBe("# Section A");
-  });
-
-  it("is idempotent when adding marker twice", () => {
-    const once = updateFoldMarker(content, 0, true);
-    const twice = updateFoldMarker(once, 0, true);
-    expect(once).toBe(twice);
-  });
-
-  it("returns original content for out-of-bounds lineIndex", () => {
-    expect(updateFoldMarker(content, 99, true)).toBe(content);
-    expect(updateFoldMarker(content, -1, true)).toBe(content);
-  });
-});

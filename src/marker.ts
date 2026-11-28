@@ -31,15 +31,3 @@ export function parseFoldedHeadings(content: string): Set<number> {
   return folded;
 }
 
-export function updateFoldMarker(
-  content: string,
-  lineIndex: number,
-  folded: boolean
-): string {
-  const lines = content.split("\n");
-  if (lineIndex < 0 || lineIndex >= lines.length) return content;
-  lines[lineIndex] = folded
-    ? addFoldMarker(lines[lineIndex])
-    : removeFoldMarker(lines[lineIndex]);
-  return lines.join("\n");
-}
