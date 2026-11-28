@@ -1,16 +1,17 @@
 import { Plugin, TFile, MarkdownView } from "obsidian";
+import { Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { foldEffect, unfoldEffect, foldable, ensureSyntaxTree } from "@codemirror/language";
 import { buildFoldExtension, getFoldRangeMap, setsEqual } from "./fold-extension";
 import { buildMarkerHideExtension } from "./hide-extension";
-import { parseFoldedHeadings, updateFoldMarker } from "./marker";
+import { parseFoldedHeadings, addFoldMarker, removeFoldMarker } from "./marker";
 
 export default class CollapsiblePlugin extends Plugin {
   private isSyncing = false;
 
   onload() {
     this.registerEditorExtension([
-      buildFoldExtension((lineNum, folded) => void this.handleFoldChange(lineNum, folded)),
+      buildFoldExtension((view, lineNum, folded) => this.handleFoldChange(view, lineNum, folded)),
       buildMarkerHideExtension(),
     ]);
 
@@ -33,23 +34,31 @@ export default class CollapsiblePlugin extends Plugin {
     );
   }
 
-  private async handleFoldChange(lineNum: number, folded: boolean) {
+  private handleFoldChange(view: EditorView, lineNum: number, folded: boolean) {
     if (this.isSyncing) return;
-    const file = this.app.workspace.getActiveFile();
-    if (!file) return;
 
-    this.isSyncing = true;
-    try {
-      await this.app.vault.process(file, (content) =>
-        updateFoldMarker(content, lineNum, folded)
-      );
-    } finally {
-      this.isSyncing = false;
-    }
+    // Write the marker through the editor, not the vault: writing the file
+    // directly leaves Obsidian's in-memory buffer stale, which triggers
+    // "modified externally" merges and lets the next save drop the marker.
+    // Deferred because CM6 forbids dispatching from inside a view update.
+    window.setTimeout(() => {
+      if (lineNum >= view.state.doc.lines) return;
+      const line = view.state.doc.line(lineNum + 1);
+      const text = folded ? addFoldMarker(line.text) : removeFoldMarker(line.text);
+      if (text === line.text) return;
+      // Old and new text share a prefix; change only the suffix so the fold,
+      // which starts at the end of the heading line, is mapped past it.
+      const n = Math.min(text.length, line.text.length);
+      view.dispatch({
+        changes: { from: line.from + n, to: line.to, insert: text.slice(n) },
+        annotations: Transaction.addToHistory.of(false),
+      });
+    }, 0);
   }
 
   private async syncFoldStateFromFile(file: TFile) {
-    // Skip our own writes to avoid reacting to markers we just placed.
+    // Skip while we are dispatching folds ourselves. Our own saves land here
+    // too, but are a no-op: the buffer markers already match the folds.
     if (this.isSyncing) return;
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
